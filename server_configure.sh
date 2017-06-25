@@ -1,2 +1,2 @@
 #!/bin/sh
-echo "Config script"
+echo "Config script" >> /tmp/vnf.log
