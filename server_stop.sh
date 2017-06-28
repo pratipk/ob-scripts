@@ -1,2 +1,2 @@
 #server_stop.sh
-docker-compose -f /home/nav/NAV_Demo.yml down
+docker-compose -f /opt/openbaton/scripts/NAV_Demo.yml down
