@@ -1,0 +1,339 @@
+version: '2.0'
+services:
+    portainer:
+        image: portainer/portainer
+        container_name: portainer
+        restart: always
+        ports:
+           - 9000:9000
+        volumes:
+           - /var/run/docker.sock:/var/run/docker.sock
+    kafka:
+        image: 135.249.45.113:9000/kafka:0.9.0.1
+        container_name: kafka
+        restart: always
+        environment:
+            - ADVERTISED_HOST=${MY_IP}
+            - ADVERTISED_PORT=9092
+            - JMX_PORT=9093
+        ports:
+            - "2181:2181"
+            - "9092:9092"
+            - "9093:9093"
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+                fluentd-address: "0.0.0.0:24224"
+                tag: "docker.{{.ID}}"
+        depends_on:
+            - fluentd
+    fluentd:
+        image: 135.249.45.113:9003/fnms-fluent:nokia-1.0.10
+        container_name: anv-fluentd
+        restart: always
+        ports:
+            - "24224:24224"
+        environment:
+            - ES_IP=elasticsearch
+            - ES_PORT=9200
+            - KIBANA_VERSION=5.2.0
+        links:
+            - elasticsearch
+        depends_on:
+            - elasticsearch
+    elasticsearch:
+        image: 135.249.45.113:9000/elasticsearch:5.2.0
+        container_name: anv-elasticsearch
+        restart: always
+        ports:
+            - "9200:9200"
+    kibana:
+        image: 135.249.45.113:9000/kibana:5.2.0
+        container_name: anv-kibana
+        restart: always
+        ports:
+            - "5601:5601"
+        environment:
+            - ELASTICSEARCH_URL=http://elasticsearch:9200
+        links:
+            - elasticsearch
+        depends_on:
+            - elasticsearch
+    db:
+        image: 135.249.45.113:9000/fnms-mariadb:nokia-1.0.10
+        container_name: anv-mariadb
+        restart: always
+        ports:
+            - "3306:3306"
+        environment:
+            - MYSQL_ROOT_PASSWORD=mysql
+            - TERM=vt100
+        depends_on:
+            - elasticsearch
+    syncope:
+       image: 135.249.45.113:9000/fnms-syncope:nokia-1.0.10
+       container_name: syncope
+       restart: always
+       tty: true
+       ports:
+         - "9080:9080"
+       environment:
+           - SYNCOPE_DB_IP=db
+           - SYNCOPE_DB_PORT=3306
+           - SYNCOPE_DB_USER=root
+           - SYNCOPE_DB_PASSWORD=mysql
+           - SYNCOPE_DB_NAME=syncope
+       depends_on:
+           - db 
+    anv:
+        image: 135.249.45.113:9000/anv:1.3.1-int_3140
+        container_name: anv-docker
+        restart: always
+        ports:
+            - "6514:6514"
+            - "6524:6524"
+            - "8181:8181"
+        environment:
+            - LOG_LEVEL=INFO
+            - DB_HOST=db
+            - DB_PORT=3306
+            - DB_USER=root
+            - DB_NAME=anv
+            - DB_PASSWORD=mysql
+            - NC_NBI_IP=0.0.0.0
+            - NC_NBI_SSH_PORT=6514
+            - NAV_CALLHOME_TLS_PORT=6524
+            - NAV_CALLHOME_TLS_TRUST_CHAIN_PATH=/anv/anv-current/trustchain.crt
+            - NAV_CALLHOME_TLS_PRIV_KEY_PATH=/anv/anv-current/privatekey.pem
+            - NAV_CALLHOME_TLS_PRIV_KEY_CERT_PATH=/anv/anv-current/privatekeycert.crt
+            - NC_ENABLE_RPC_OUTPUT_VALIDATION=false
+            - NC_DISABLE_IDENTITY_REF_VALIDATION=true
+            - NAV_DISABLE_LICENSE_CHECK=true
+            - RMI_PORT=1099
+            - ELASTICSEARCH_URL=http://elasticsearch:9200
+            - ALARM_BRIDGE_ES_URL=http://elasticsearch:9200
+            - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+            - KAFKA_ZOOKEEPER_SERVERS=kafka:2181
+            - NAV_NAME=MyANV
+            - NAV_ENABLE_DEVICE_SWMGMT=true
+            - SYNCOPE_URL=http://syncope:9080
+            - SYNCOPE_ADMIN_USER=admin
+            - SYNCOPE_ADMIN_PASSWORD=password
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+               fluentd-address: "0.0.0.0:24224"
+               tag: "docker.{{.ID}}"
+        depends_on:
+            - db
+            - fluentd
+            - kafka
+            - syncope
+    opentsdb:
+        container_name: opentsdb
+        image: 135.249.45.113:9003/fnms-opentsdb:nokia-1.0.11
+        ports:
+            - "4242:4242"
+    live-collector:
+        container_name: fnms-live-collector
+        image: 135.249.45.113:9000/nav-live-collector:1.3.1-int_3140
+        restart: always
+        environment:
+            - KAFKA_BOOTSTRAP_SERVERS=${MY_IP}:9092
+            - OPENTSDB_URL=http://${MY_IP}:4242
+            - KAFKA_METRICS_GROUP_ID=my-consumer
+            - KAFKA_METRICS_TOPIC=nc-live
+        ports:
+            - "4567:4567"
+        stdin_open: true
+        tty: true
+        depends_on:
+            - fluentd
+            - kafka
+            - opentsdb
+    sx16f-simulator-1:
+        image: 135.249.45.113:9000/sx16f-simulator:1.3.1-int_3140
+        container_name: sx16f-sim-id-4-4
+        ports:
+            - "1024:1023"
+            - "9292:9292"
+        environment:
+            - com_nokia_anv_simulator_circuit_id_prefix=4-4-
+            - com_nokia_anv_simulator_call_home_device_start_port=30000
+            - com_nokia_anv_simulator_call_home_dhcp_enabled=false
+            - com_nokia_anv_simulator_call_home_duid_enabled=true
+            - com_nokia_anv_simulator_connect_on_startup=true
+            - com_nokia_anv_simulator_instance_count=1
+            - com_nokia_anv_simulator_management_port=1023
+            - com_nokia_anv_simulator_need_client_authentication=false
+            - com_nokia_anv_simulator_no_gui=true
+            - com_nokia_anv_simulator_protocol=SSH
+            - com_nokia_anv_simulator_netconf_server_port=9292
+            - com_nokia_anv_simulator_netconf_server_ip=0.0.0.0
+            - com_nokia_anv_simulator_ssh_password=admin
+            - com_nokia_anv_simulator_ssh_username=admin
+            - com_nokia_anv_simulator_call_home_device_ip=0.0.0.0
+            - com_nokia_anv_simulator_tls_call_home_port=6524
+            - com_nokia_anv_simulator_tls_certificate_chain_location=/simulator/sx16f-simulator-current/extras/sim.crt
+            - com_nokia_anv_simulator_tls_privatekey_location=/simulator/sx16f-simulator-current/extras/simPK.pem
+            - com_nokia_anv_simulator_tls_trust_chain_location=/simulator/sx16f-simulator-current/extras/rootCA.pem
+            - com_nokia_anv_simulator_tls_trust_generatedFiles.location=/tmp
+            - com_nokia_anv_simulator_tls_trust_privatekey_location=/simulator/sx16f-simulator-current/extras/rootCA.key
+            - com_nokia_anv_simulator_tls_trust_privatekey_password=
+            - DISABLE_IDENTITY_REF_VALIDATION=true
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+               fluentd-address: "0.0.0.0:24224"
+               tag: "docker.{{.ID}}"
+        depends_on:
+            - fluentd
+            - anv
+    gfast-simulator-1:
+        image: 135.249.45.113:9000/gfast-simulator-v2:1.3.1-int_3140
+        container_name: gfast-sim-id-1-1
+        ports:
+            - "1023:1023"
+        environment:
+            - com_nokia_anv_simulator_circuit_id_prefix=1-1-
+            - com_nokia_anv_simulator_call_home_device_start_port=30000
+            - com_nokia_anv_simulator_call_home_dhcp_enabled=false
+            - com_nokia_anv_simulator_call_home_duid_enabled=true
+            - com_nokia_anv_simulator_connect_on_startup=true
+            - com_nokia_anv_simulator_instance_count=1
+            - com_nokia_anv_simulator_management_port=1023
+            - com_nokia_anv_simulator_need_client_authentication=false
+            - com_nokia_anv_simulator_no_gui=true
+            - com_nokia_anv_simulator_protocol=SSH
+            - com_nokia_anv_simulator_netconf_server_port=9292
+            - com_nokia_anv_simulator_netconf_server_ip=0.0.0.0
+            - com_nokia_anv_simulator_ssh_password=admin
+            - com_nokia_anv_simulator_ssh_username=admin
+            - com_nokia_anv_simulator_call_home_device_ip=0.0.0.0
+            - com_nokia_anv_simulator_nav_ip=anv
+            - com_nokia_anv_simulator_tls_call_home_port=6524
+            - com_nokia_anv_simulator_tls_certificate_chain_location=/simulator/gfast-simulator-v2-current/extras/sim.crt
+            - com_nokia_anv_simulator_tls_privatekey_location=/simulator/gfast-simulator-v2-current/extras/simPK.pem
+            - com_nokia_anv_simulator_tls_trust_chain_location=/simulator/gfast-simulator-v2-current/extras/rootCA.pem
+            - com_nokia_anv_simulator_tls_trust_generatedFiles.location=/tmp
+            - com_nokia_anv_simulator_tls_trust_privatekey_location=/simulator/gfast-simulator-v2-current/extras/rootCA.key
+            - com_nokia_anv_simulator_tls_trust_privatekey_password=
+            - DISABLE_IDENTITY_REF_VALIDATION=true
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+               fluentd-address: "0.0.0.0:24224"
+               tag: "docker.{{.ID}}"
+        depends_on:
+            - fluentd
+            - anv
+    gfast-simulator-2:
+        image: 135.249.45.113:9000/gfast-simulator-v2:1.3.1-int_3140
+        container_name: gfast-sim-id-2-2
+        environment:
+            - com_nokia_anv_simulator_circuit_id_prefix=2-2-
+            - com_nokia_anv_simulator_call_home_device_start_port=30000
+            - com_nokia_anv_simulator_call_home_dhcp_enabled=false
+            - com_nokia_anv_simulator_call_home_duid_enabled=true
+            - com_nokia_anv_simulator_connect_on_startup=true
+            - com_nokia_anv_simulator_instance_count=1
+            - com_nokia_anv_simulator_management_port=1023
+            - com_nokia_anv_simulator_need_client_authentication=false
+            - com_nokia_anv_simulator_no_gui=true
+            - com_nokia_anv_simulator_protocol=SSH
+            - com_nokia_anv_simulator_netconf_server_port=9292
+            - com_nokia_anv_simulator_netconf_server_ip=0.0.0.0
+            - com_nokia_anv_simulator_ssh_password=admin
+            - com_nokia_anv_simulator_ssh_username=admin
+            - com_nokia_anv_simulator_call_home_device_ip=0.0.0.0
+            - com_nokia_anv_simulator_nav_ip=anv
+            - com_nokia_anv_simulator_tls_call_home_port=6524
+            - com_nokia_anv_simulator_tls_certificate_chain_location=/simulator/gfast-simulator-v2-current/extras/sim.crt
+            - com_nokia_anv_simulator_tls_privatekey_location=/simulator/gfast-simulator-v2-current/extras/simPK.pem
+            - com_nokia_anv_simulator_tls_trust_chain_location=/simulator/gfast-simulator-v2-current/extras/rootCA.pem
+            - com_nokia_anv_simulator_tls_trust_generatedFiles.location=/tmp
+            - com_nokia_anv_simulator_tls_trust_privatekey_location=/simulator/gfast-simulator-v2-current/extras/rootCA.key
+            - com_nokia_anv_simulator_tls_trust_privatekey_password=
+            - DISABLE_IDENTITY_REF_VALIDATION=true
+        stdin_open: true
+        tty: true
+        depends_on:
+            - fluentd
+            - anv
+    gfast-simulator-3:
+        image: 135.249.45.113:9000/gfast-simulator-v2:1.3.1-int_3140
+        container_name: gfast-sim-id-3-3
+        ports:
+            - "1025:1023"
+            - "9293:9292"
+        environment:
+            - com_nokia_anv_simulator_circuit_id_prefix=3-3-
+            - com_nokia_anv_simulator_call_home_device_start_port=30000
+            - com_nokia_anv_simulator_call_home_dhcp_enabled=false
+            - com_nokia_anv_simulator_call_home_duid_enabled=true
+            - com_nokia_anv_simulator_connect_on_startup=true
+            - com_nokia_anv_simulator_instance_count=1
+            - com_nokia_anv_simulator_management_port=1023
+            - com_nokia_anv_simulator_need_client_authentication=false
+            - com_nokia_anv_simulator_no_gui=true
+            - com_nokia_anv_simulator_protocol=SSH
+            - com_nokia_anv_simulator_netconf_server_port=9292
+            - com_nokia_anv_simulator_netconf_server_ip=0.0.0.0
+            - com_nokia_anv_simulator_ssh_password=admin
+            - com_nokia_anv_simulator_ssh_username=admin
+            - com_nokia_anv_simulator_call_home_device_ip=0.0.0.0
+            - com_nokia_anv_simulator_nav_ip=anv
+            - com_nokia_anv_simulator_tls_call_home_port=6524
+            - com_nokia_anv_simulator_tls_certificate_chain_location=/simulator/gfast-simulator-v2-current/extras/sim.crt
+            - com_nokia_anv_simulator_tls_privatekey_location=/simulator/gfast-simulator-v2-current/extras/simPK.pem
+            - com_nokia_anv_simulator_tls_trust_chain_location=/simulator/gfast-simulator-v2-current/extras/rootCA.pem
+            - com_nokia_anv_simulator_tls_trust_generatedFiles.location=/tmp
+            - com_nokia_anv_simulator_tls_trust_privatekey_location=/simulator/gfast-simulator-v2-current/extras/rootCA.key
+            - com_nokia_anv_simulator_tls_trust_privatekey_password=
+            - DISABLE_IDENTITY_REF_VALIDATION=true
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+               fluentd-address: "0.0.0.0:24224"
+               tag: "docker.{{.ID}}"
+        depends_on:
+            - fluentd
+            - anv
+    alarm-es-bridge:
+        image: 135.249.45.113:9000/alarm-es-bridge:1.3.1-int_3140
+        container_name: alarm-es-bridge
+        ports:
+            - "6005:5005"
+        environment:
+            - KARAF_DEBUG=true
+            - DB_HOST=db
+            - DB_PORT=3306
+            - DB_USER=root
+            - DB_PASSWORD=mysql
+            - DB_NAME=alarm-es-bridge
+            - BRIDGE_ES_URL=http://elasticsearch:9200
+            - ALARM_TOPICS=MyANV_ALARM
+            - BRIDGE_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+            - LOG_LEVEL=INFO
+        depends_on:
+            - fluentd
+            - kafka
+            - elasticsearch
+        stdin_open: true
+        tty: true
+        logging:
+            driver: fluentd
+            options:
+                fluentd-address: "0.0.0.0:24224"
+                tag: "docker.{{.ID}}"
+
