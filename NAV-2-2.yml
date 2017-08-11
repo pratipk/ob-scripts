@@ -1,0 +1,27 @@
+version: '2.0'
+services:
+    portainer:
+        image: portainer/portainer
+        container_name: portainer
+        restart: always
+        ports:
+           - 9000:9000
+        volumes:
+           - /var/run/docker.sock:/var/run/docker.sock
+    live-collector:
+        container_name: fnms-live-collector
+        image: 135.249.45.113:9000/nav-live-collector:1.3.1-int_3140
+        restart: always
+        environment:
+            - KAFKA_BOOTSTRAP_SERVERS=${SERVER_IP}:9092
+            - OPENTSDB_URL=http://${SERVER_IP}:4242
+            - KAFKA_METRICS_GROUP_ID=my-consumer
+            - KAFKA_METRICS_TOPIC=nc-live
+        ports:
+            - "4567:4567"
+        stdin_open: true
+        tty: true
+        depends_on:
+            - fluentd
+            - kafka
+            - opentsdb
