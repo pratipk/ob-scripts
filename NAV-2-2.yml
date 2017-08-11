@@ -21,7 +21,3 @@ services:
             - "4567:4567"
         stdin_open: true
         tty: true
-        depends_on:
-            - fluentd
-            - kafka
-            - opentsdb
