@@ -12,7 +12,7 @@ apt-get install -y zabbix-agent
 
 sed -i 's/^Server=\(.*\)/Server='$vnfm_address'/' /etc/zabbix/zabbix_agentd.conf
 sed -i 's/^ServerActive=\(.*\)/ServerActive='$vnfm_address'/' /etc/zabbix/zabbix_agentd.conf
-echo "Server="$vnfm_address >> /etc/zabbix/zabbix_agentd.conf
-echo "ServerActive="$vnfm_address >> /etc/zabbix/zabbix_agentd.conf
+# echo "Server="$vnfm_address >> /etc/zabbix/zabbix_agentd.conf
+# echo "ServerActive="$vnfm_address >> /etc/zabbix/zabbix_agentd.conf
 
 service zabbix-agent restart
