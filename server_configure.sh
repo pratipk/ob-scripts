@@ -8,7 +8,7 @@ echo "MY_IP="$internal_floatingIp > .env
 echo "SERVER_IP="$server_internal_floatingIp >> .env
 echo "VNFM_IP="$vnfm_address >> .env
 
-sudo apt-get install -y zabbix-agent
+apt-get install -y zabbix-agent
 
 sed -i 's/^Server=\(.*\)/Server='$vnfm_address'/' /etc/zabbix/zabbix_agentd.conf
 sed -i 's/^ServerActive=\(.*\)/ServerActive='$vnfm_address'/' /etc/zabbix/zabbix_agentd.conf
